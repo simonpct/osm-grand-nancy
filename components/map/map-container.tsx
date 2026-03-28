@@ -316,7 +316,9 @@ export default function MapContainer() {
         onSatelliteYearChange={handleSatelliteYearChange}
       />
 
-      <FunFacts />
+      <FunFacts onFlyTo={(lng: number, lat: number) => {
+        mapRef.current?.flyTo({ center: [lng, lat], zoom: 21, duration: 1500 });
+      }} />
     </div>
   );
 }

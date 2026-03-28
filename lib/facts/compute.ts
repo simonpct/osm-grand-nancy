@@ -12,6 +12,15 @@ export interface FunFact {
 export interface RankedItem {
   name: string;
   value: string;
+  /** Center coordinates for flyTo [longitude, latitude] */
+  coords?: [number, number];
+}
+
+/** A slice in a pie chart */
+export interface PieSlice {
+  label: string;
+  value: number;
+  color: string;
 }
 
 /** A section in the stats drawer */
@@ -20,6 +29,7 @@ export interface StatSection {
   title: string;
   stats: { label: string; value: string }[];
   top?: { title: string; items: RankedItem[] };
+  pie?: { title: string; slices: PieSlice[] };
 }
 
 export interface FactsPayload {
@@ -136,6 +146,34 @@ function icon(id: LayerCategory): string {
   return layersConfig.find((l) => l.id === id)?.icon ?? "📍";
 }
 
+const PIE_COLORS = ["#e63946", "#2a9d8f", "#f4a261", "#264653", "#e9c46a", "#6a4c93", "#8ac926", "#1982c4"];
+
+function buildPie(freq: Map<string, number>, labels?: Record<string, string>): PieSlice[] {
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([k, v], i) => ({ label: labels?.[k] ?? k, value: v, color: PIE_COLORS[i % PIE_COLORS.length] }));
+}
+
+function featureCenter(f: Feature): [number, number] | undefined {
+  if (f.geometry.type === "Point") {
+    const c = (f.geometry as { coordinates: Position }).coordinates;
+    return [c[0], c[1]];
+  }
+  if (f.geometry.type === "LineString") {
+    const coords = (f.geometry as LineString).coordinates;
+    const mid = coords[Math.floor(coords.length / 2)];
+    return [mid[0], mid[1]];
+  }
+  if (f.geometry.type === "Polygon") {
+    const ring = (f.geometry as Polygon).coordinates[0];
+    const lngs = ring.map((c) => c[0]);
+    const lats = ring.map((c) => c[1]);
+    return [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
+  }
+  return undefined;
+}
+
 function featureLineLength(f: Feature): number {
   if (f.geometry.type === "LineString") return lineLength((f.geometry as LineString).coordinates);
   return 0;
@@ -175,6 +213,7 @@ export function computeFacts(data: DataMap): FactsPayload {
         items: top3.map((f) => ({
           name: featureName(f),
           value: fmtKm(featureLineLength(f)),
+          coords: featureCenter(f),
         })),
       },
     });
@@ -188,21 +227,46 @@ export function computeFacts(data: DataMap): FactsPayload {
 
     facts.push({ icon: icon("sidewalks"), text: `${fmtKm(total)} de trottoirs et chemins piétons` });
 
+    // Crossings (footway=crossing)
+    const crossings = sidewalkLines.filter((f) => f.properties?.footway === "crossing");
+    const crossingTop3 = topN(crossings, featureLineLength, 3);
+
     sections.push({
       icon: icon("sidewalks"),
       title: "Trottoirs & chemins",
       stats: [
         { label: "Total", value: fmtKm(total) },
         { label: "Segments", value: fmtN(sidewalkLines.length) },
+        ...(crossings.length > 0 ? [{ label: "Passages piétons", value: fmtN(crossings.length) }] : []),
       ],
       top: {
         title: "Top 3 des plus longs",
         items: top3.map((f) => ({
           name: featureName(f),
           value: fmtKm(featureLineLength(f)),
+          coords: featureCenter(f),
         })),
       },
     });
+
+    if (crossingTop3.length > 0) {
+      sections.push({
+        icon: "🚸",
+        title: "Passages piétons",
+        stats: [
+          { label: "Total", value: fmtN(crossings.length) },
+          { label: "Longueur cumulée", value: fmtKm(totalLineLength(crossings)) },
+        ],
+        top: {
+          title: "Top 3 des plus longs passages",
+          items: crossingTop3.map((f) => ({
+            name: featureName(f),
+            value: fmtKm(featureLineLength(f)),
+            coords: featureCenter(f),
+          })),
+        },
+      });
+    }
   }
 
   // ── Bus lines ──
@@ -236,6 +300,7 @@ export function computeFacts(data: DataMap): FactsPayload {
         items: top3.map((f) => ({
           name: f.properties?.ref ? `Ligne ${f.properties.ref}` : featureName(f),
           value: fmtKm(featureLineLength(f)),
+          coords: featureCenter(f),
         })),
       };
     }
@@ -282,6 +347,7 @@ export function computeFacts(data: DataMap): FactsPayload {
         items: top3.map((f) => ({
           name: featureName(f),
           value: fmtKm(featureLineLength(f)),
+          coords: featureCenter(f),
         })),
       },
     });
@@ -323,6 +389,9 @@ export function computeFacts(data: DataMap): FactsPayload {
     const posLabels: Record<string, string> = { sidewalk: "Trottoir", lane: "Chaussée", parking_lot: "Parking", green: "Espace vert" };
     const topPos = mostCommon(positions);
 
+    const typeFreq = new Map<string, number>();
+    for (const t of types) typeFreq.set(t, (typeFreq.get(t) ?? 0) + 1);
+
     sections.push({
       icon: icon("fire-hydrants"),
       title: "Bornes incendie",
@@ -331,6 +400,9 @@ export function computeFacts(data: DataMap): FactsPayload {
         ...(topType ? [{ label: "Type principal", value: typeLabels[topType.value] ?? topType.value }] : []),
         ...(topPos ? [{ label: "Position courante", value: posLabels[topPos.value] ?? topPos.value }] : []),
       ],
+      ...(typeFreq.size > 1
+        ? { pie: { title: "Répartition par type", slices: buildPie(typeFreq, typeLabels) } }
+        : {}),
     });
   }
 
@@ -382,6 +454,7 @@ export function computeFacts(data: DataMap): FactsPayload {
               items: top3.map((f) => ({
                 name: featureName(f),
                 value: fmtHa(featureArea(f)),
+                coords: featureCenter(f),
               })),
             },
           }

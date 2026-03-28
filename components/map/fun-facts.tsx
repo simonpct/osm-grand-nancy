@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, ChevronRight, Trophy } from "lucide-react";
-import type { FactsPayload, StatSection } from "@/lib/facts/compute";
+import { X, ChevronRight, Trophy, MapPin } from "lucide-react";
+import type { FactsPayload, StatSection, PieSlice } from "@/lib/facts/compute";
 import { factsUrl } from "@/lib/pbf/blob-url";
 
 const ROTATE_INTERVAL = 8000;
 
-export function FunFacts() {
+interface FunFactsProps {
+  onFlyTo?: (lng: number, lat: number) => void;
+}
+
+export function FunFacts({ onFlyTo }: FunFactsProps) {
   const [payload, setPayload] = useState<FactsPayload | null>(null);
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -112,7 +116,7 @@ export function FunFacts() {
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="space-y-6">
             {payload.sections.map((section, i) => (
-              <SectionCard key={i} section={section} />
+              <SectionCard key={i} section={section} onFlyTo={onFlyTo} />
             ))}
           </div>
         </div>
@@ -121,7 +125,7 @@ export function FunFacts() {
   );
 }
 
-function SectionCard({ section }: { section: StatSection }) {
+function SectionCard({ section, onFlyTo }: { section: StatSection; onFlyTo?: (lng: number, lat: number) => void }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
       {/* Section title */}
@@ -147,6 +151,14 @@ function SectionCard({ section }: { section: StatSection }) {
         ))}
       </div>
 
+      {/* Pie chart */}
+      {section.pie && section.pie.slices.length > 1 && (
+        <div className="mt-3">
+          <div className="mb-2 text-xs font-medium text-gray-500">{section.pie.title}</div>
+          <PieChart slices={section.pie.slices} />
+        </div>
+      )}
+
       {/* Top ranking */}
       {section.top && section.top.items.length > 0 && (
         <div className="mt-3">
@@ -156,9 +168,15 @@ function SectionCard({ section }: { section: StatSection }) {
           </div>
           <div className="space-y-1">
             {section.top.items.map((item, i) => (
-              <div
+              <button
                 key={i}
-                className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 shadow-sm"
+                disabled={!item.coords || !onFlyTo}
+                onClick={() => {
+                  if (item.coords && onFlyTo) onFlyTo(item.coords[0], item.coords[1]);
+                }}
+                className={`flex w-full items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-left shadow-sm transition-colors ${
+                  item.coords && onFlyTo ? "cursor-pointer hover:bg-blue-50" : ""
+                }`}
               >
                 <span
                   className={`flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
@@ -177,11 +195,56 @@ function SectionCard({ section }: { section: StatSection }) {
                 <span className="shrink-0 text-xs font-medium text-gray-500">
                   {item.value}
                 </span>
-              </div>
+                {item.coords && onFlyTo && (
+                  <MapPin className="size-3 shrink-0 text-blue-400" />
+                )}
+              </button>
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PieChart({ slices }: { slices: PieSlice[] }) {
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  if (total === 0) return null;
+
+  const size = 120;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 45;
+
+  let cumAngle = -Math.PI / 2;
+  const paths = slices.map((slice) => {
+    const angle = (slice.value / total) * 2 * Math.PI;
+    const startX = cx + r * Math.cos(cumAngle);
+    const startY = cy + r * Math.sin(cumAngle);
+    cumAngle += angle;
+    const endX = cx + r * Math.cos(cumAngle);
+    const endY = cy + r * Math.sin(cumAngle);
+    const largeArc = angle > Math.PI ? 1 : 0;
+    const d = `M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY} Z`;
+    return { d, color: slice.color, label: slice.label, pct: Math.round((slice.value / total) * 100) };
+  });
+
+  return (
+    <div className="flex items-center gap-3">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+        {paths.map((p, i) => (
+          <path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth={1} />
+        ))}
+      </svg>
+      <div className="space-y-1">
+        {paths.map((p, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-xs">
+            <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
+            <span className="text-gray-600">{p.label}</span>
+            <span className="font-medium text-gray-900">{p.pct}%</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

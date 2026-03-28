@@ -1,5 +1,5 @@
 import {
-  GRAND_NANCY_BBOX,
+  GRAND_NANCY_POLYGON,
   SLICE_API,
   POLL_INTERVAL,
   POLL_TIMEOUT,
@@ -10,8 +10,6 @@ function sleep(ms: number) {
 }
 
 export async function downloadPbf(): Promise<Buffer> {
-  const [minLon, minLat, maxLon, maxLat] = GRAND_NANCY_BBOX;
-
   console.log("Requesting PBF extract from slice.openstreetmap.us...");
   const res = await fetch(SLICE_API, {
     method: "POST",
@@ -21,15 +19,7 @@ export async function downloadPbf(): Promise<Buffer> {
       RegionType: "geojson",
       RegionData: {
         type: "Polygon",
-        coordinates: [
-          [
-            [minLon, minLat],
-            [maxLon, minLat],
-            [maxLon, maxLat],
-            [minLon, maxLat],
-            [minLon, minLat],
-          ],
-        ],
+        coordinates: [GRAND_NANCY_POLYGON],
       },
     }),
   });

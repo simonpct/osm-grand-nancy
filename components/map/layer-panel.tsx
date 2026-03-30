@@ -7,9 +7,13 @@ interface LayerPanelProps {
   visibleLayers: Set<LayerCategory>;
   loadingLayers: Set<LayerCategory>;
   onToggle: (id: LayerCategory) => void;
+  bikeCoverage: boolean;
+  onBikeCoverageToggle: () => void;
 }
 
-export function LayerPanel({ visibleLayers, loadingLayers, onToggle }: LayerPanelProps) {
+export function LayerPanel({ visibleLayers, loadingLayers, onToggle, bikeCoverage, onBikeCoverageToggle }: LayerPanelProps) {
+  const bikeRentalActive = visibleLayers.has("bike-rental");
+
   return (
     <div className="absolute top-4 left-4 z-10 flex max-w-xs flex-wrap gap-2">
       {layersConfig.map((config) => {
@@ -37,6 +41,17 @@ export function LayerPanel({ visibleLayers, loadingLayers, onToggle }: LayerPane
           </button>
         );
       })}
+      {bikeRentalActive && (
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm transition-all hover:bg-white hover:shadow-md">
+          <input
+            type="checkbox"
+            checked={bikeCoverage}
+            onChange={onBikeCoverageToggle}
+            className="accent-[#e76f51]"
+          />
+          Zone 300m
+        </label>
+      )}
     </div>
   );
 }

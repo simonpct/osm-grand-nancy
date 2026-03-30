@@ -48,7 +48,7 @@ export const baseLayers: BaseLayer[] = [
     ],
     attribution: '&copy; <a href="https://geoservices.ign.fr">IGN</a>',
     tileSize: 256,
-  },
+  }
 ];
 
 // TMS: {zoom}/{x}/{y} → MapLibre uses {z}/{x}/{y} directly

@@ -57,6 +57,7 @@ export default function MapContainer() {
     () => readStoredStringOrNull(LS_SATELLITE_YEAR)
   );
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
+  const [bikeCoverage, setBikeCoverage] = useState(false);
 
   const storedView = useMemo(() => readStoredMapView(), []);
 
@@ -234,7 +235,7 @@ export default function MapContainer() {
                 filter={["==", "$type", "LineString"]}
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
-                  "line-color": config.color,
+                  "line-color": ["coalesce", ["get", "colour"], config.color],
                   "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 14, 3, 18, 6],
                   "line-opacity": 0.8,
                 }}
@@ -245,9 +246,9 @@ export default function MapContainer() {
                 filter={["==", "$type", "Polygon"]}
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
-                  "fill-color": config.color,
+                  "fill-color": ["coalesce", ["get", "colour"], config.color],
                   "fill-opacity": 0.3,
-                  "fill-outline-color": config.color,
+                  "fill-outline-color": ["coalesce", ["get", "colour"], config.color],
                 }}
               />
               {/* Point layer: larger circle for fire hydrants at high zoom to fit text */}
@@ -257,7 +258,7 @@ export default function MapContainer() {
                 filter={["==", "$type", "Point"]}
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
-                  "circle-color": config.color,
+                  "circle-color": ["coalesce", ["get", "colour"], config.color],
                   "circle-radius":
                     config.id === "fire-hydrants"
                       ? ["interpolate", ["linear"], ["zoom"], 14, 4, 16, 12]
@@ -267,6 +268,30 @@ export default function MapContainer() {
                   "circle-opacity": 0.8,
                 }}
               />
+              {/* Bike rental 300m coverage zone */}
+              {config.id === "bike-rental" && (
+                <Layer
+                  id="bike-rental-coverage"
+                  type="circle"
+                  filter={["==", "$type", "Point"]}
+                  layout={{ visibility: visible && bikeCoverage ? "visible" : "none" }}
+                  paint={{
+                    "circle-color": config.color,
+                    "circle-opacity": 0.12,
+                    "circle-radius": [
+                      "interpolate", ["exponential", 2], ["zoom"],
+                      10, 3,
+                      12, 12.5,
+                      14, 50,
+                      16, 200,
+                      18, 800,
+                    ],
+                    "circle-stroke-color": config.color,
+                    "circle-stroke-width": 1,
+                    "circle-stroke-opacity": 0.3,
+                  }}
+                />
+              )}
               {/* Fire hydrant ref label inside the circle */}
               {config.id === "fire-hydrants" && (
                 <Layer
@@ -307,6 +332,8 @@ export default function MapContainer() {
         visibleLayers={visibleLayers}
         loadingLayers={loadingLayers}
         onToggle={toggleLayer}
+        bikeCoverage={bikeCoverage}
+        onBikeCoverageToggle={() => setBikeCoverage((v) => !v)}
       />
 
       <BaseLayerSwitcher

@@ -38,6 +38,11 @@ export function FeaturePopup({ info }: { info: PopupInfo }) {
   const config = layersConfig.find((c) => c.id === layerId);
   const fields = config?.popupFields ?? [];
 
+  const subLabel = config?.subLabels?.find((s) =>
+    Object.entries(s.match).every(([k, v]) => properties[k] === v),
+  );
+  const label = subLabel?.label ?? config?.label ?? layerId;
+
   const badge = fields.find((f) => f.badge);
   const badgeValue = badge ? str(properties[badge.key]) : null;
 
@@ -55,7 +60,7 @@ export function FeaturePopup({ info }: { info: PopupInfo }) {
         style={{ backgroundColor: config?.color, color: "#fff" }}
       >
         {config?.icon && <span className="text-base">{config.icon}</span>}
-        <span className="font-semibold">{config?.label ?? layerId}</span>
+        <span className="font-semibold">{label}</span>
         {badgeValue && (
           <span className="ml-auto rounded bg-white/20 px-1.5 py-0.5 text-xs font-bold">
             {badgeValue}

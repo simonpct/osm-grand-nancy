@@ -146,21 +146,21 @@ export default function MapContainer() {
     const map = mapRef.current?.getMap();
     if (!map) return;
 
-    // Query all visible point layers
-    const pointLayerIds = layersConfig
-      .filter((c) => visibleLayers.has(c.id))
-      .map((c) => `${c.id}-point`);
+    const visibleConfigs = layersConfig.filter((c) => visibleLayers.has(c.id));
+    const queryLayerIds = visibleConfigs.flatMap((c) => [
+      `${c.id}-point`, `${c.id}-line`, `${c.id}-polygon`,
+    ]);
 
-    if (pointLayerIds.length === 0) return;
+    if (queryLayerIds.length === 0) return;
 
-    const features = map.queryRenderedFeatures(e.point, { layers: pointLayerIds });
+    const features = map.queryRenderedFeatures(e.point, { layers: queryLayerIds });
     if (features.length === 0) {
       setPopupInfo(null);
       return;
     }
 
     const feature = features[0];
-    const layerId = feature.layer.id.replace("-point", "") as LayerCategory;
+    const layerId = feature.layer.id.replace(/-(?:point|line|polygon)$/, "") as LayerCategory;
 
     setPopupInfo({
       longitude: e.lngLat.lng,
@@ -214,7 +214,7 @@ export default function MapContainer() {
         onClick={handleMapClick}
         interactiveLayerIds={layersConfig
           .filter((c) => visibleLayers.has(c.id))
-          .map((c) => `${c.id}-point`)}
+          .flatMap((c) => [`${c.id}-point`, `${c.id}-line`, `${c.id}-polygon`])}
         cursor={popupInfo ? "default" : undefined}
       >
         {layersConfig.map((config) => {
@@ -235,7 +235,7 @@ export default function MapContainer() {
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
                   "line-color": config.color,
-                  "line-width": 2,
+                  "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 14, 3, 18, 6],
                   "line-opacity": 0.8,
                 }}
               />

@@ -17,6 +17,12 @@ export interface PopupFieldConfig {
   boolean?: boolean;
 }
 
+export interface SubLabelRule {
+  /** Tag conditions: all must match for the sub-label to apply */
+  match: Record<string, string>;
+  label: string;
+}
+
 export interface LayerConfig {
   id: LayerCategory;
   label: string;
@@ -24,6 +30,8 @@ export interface LayerConfig {
   type: "point" | "line" | "polygon" | "mixed";
   icon?: string;
   popupFields?: PopupFieldConfig[];
+  /** Override popup header label based on feature tags */
+  subLabels?: SubLabelRule[];
 }
 
 export const layersConfig: LayerConfig[] = [
@@ -43,6 +51,15 @@ export const layersConfig: LayerConfig[] = [
       { key: "surface", label: "Revêtement" },
       { key: "width", label: "Largeur" },
       { key: "lit", label: "Éclairé", boolean: true },
+    ],
+  },
+  {
+    id: "bike-rental", label: "Vélos en libre-service", color: "#e76f51", type: "point", icon: "🚲",
+    popupFields: [
+      { key: "name", label: "Nom" },
+      { key: "operator", label: "Opérateur" },
+      { key: "capacity", label: "Capacité" },
+      { key: "network", label: "Réseau" },
     ],
   },
   {
@@ -75,10 +92,16 @@ export const layersConfig: LayerConfig[] = [
   },
   {
     id: "trolleybus-catenary", label: "Caténaires trolley", color: "#264653", type: "mixed", icon: "🚎",
+    subLabels: [
+      { match: { power: "catenary_mast" }, label: "Mât de caténaire" },
+      { match: { "trolley_wire:hardware": "reconnection_funnel" }, label: "Entonnoir de reconnexion" },
+    ],
     popupFields: [
       { key: "name", label: "Nom" },
       { key: "operator", label: "Opérateur" },
       { key: "voltage", label: "Tension" },
+      { key: "support", label: "Support", values: { wall: "Mur", pole: "Poteau" } },
+      { key: "catenary_mast:supporting", label: "Position", values: { lateral: "Latéral" } },
     ],
   },
   {

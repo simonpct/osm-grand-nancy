@@ -219,6 +219,28 @@ export function computeFacts(data: DataMap): FactsPayload {
     });
   }
 
+  // ── Bike rental ──
+  const bikeRentalCount = count(data["bike-rental"]);
+  if (bikeRentalCount > 0) {
+    facts.push({ icon: icon("bike-rental"), text: `${fmtN(bikeRentalCount)} stations de vélos en libre-service` });
+
+    const bikeRentalPts = pts(data["bike-rental"]);
+    const operators = bikeRentalPts.map((f) => f.properties?.operator as string).filter(Boolean);
+    const topOp = mostCommon(operators);
+    const capacities = bikeRentalPts.map((f) => parseInt(f.properties?.capacity as string, 10)).filter((n) => !isNaN(n));
+    const totalCapacity = capacities.reduce((sum, n) => sum + n, 0);
+
+    sections.push({
+      icon: icon("bike-rental"),
+      title: "Vélos en libre-service",
+      stats: [
+        { label: "Stations", value: fmtN(bikeRentalCount) },
+        ...(totalCapacity > 0 ? [{ label: "Capacité totale", value: fmtN(totalCapacity) }] : []),
+        ...(topOp ? [{ label: "Opérateur principal", value: topOp.value }] : []),
+      ],
+    });
+  }
+
   // ── Sidewalks ──
   const sidewalkLines = lns(data.sidewalks);
   if (sidewalkLines.length > 0) {
@@ -516,17 +538,40 @@ export function computeFacts(data: DataMap): FactsPayload {
 
   // ── Trolleybus ──
   const trolleyLines = lns(data["trolleybus-catenary"]);
+  const catenaryMasts = pts(data["trolleybus-catenary"]).filter(
+    (f) => f.properties?.power === "catenary_mast"
+  );
   if (trolleyLines.length > 0) {
     const total = totalLineLength(trolleyLines);
     facts.push({ icon: icon("trolleybus-catenary"), text: `${fmtKm(total)} de caténaires de trolleybus` });
 
+    const stats: { label: string; value: string }[] = [
+      { label: "Longueur totale", value: fmtKm(total) },
+      { label: "Segments", value: fmtN(trolleyLines.length) },
+    ];
+    if (catenaryMasts.length > 0) {
+      stats.push({ label: "Supports", value: fmtN(catenaryMasts.length) });
+    }
+
+    // Pie: support type (pole / wall / street lamp)
+    const supportFreq = new Map<string, number>();
+    for (const f of catenaryMasts) {
+      const isLamp = f.properties?.highway === "street_lamp";
+      const support = f.properties?.support as string | undefined;
+      const cat = isLamp ? "lamp" : support === "wall" ? "wall" : "pole";
+      supportFreq.set(cat, (supportFreq.get(cat) ?? 0) + 1);
+    }
+    const supportLabels: Record<string, string> = {
+      pole: "Poteau", wall: "Mural", lamp: "Lampadaire",
+    };
+
     sections.push({
       icon: icon("trolleybus-catenary"),
       title: "Caténaires trolley",
-      stats: [
-        { label: "Longueur totale", value: fmtKm(total) },
-        { label: "Segments", value: fmtN(trolleyLines.length) },
-      ],
+      stats,
+      pie: supportFreq.size > 1
+        ? { title: "Type de support", slices: buildPie(supportFreq, supportLabels) }
+        : undefined,
     });
   }
 

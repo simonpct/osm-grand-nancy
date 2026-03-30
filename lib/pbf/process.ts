@@ -3,7 +3,7 @@ import osmtogeojson from "osmtogeojson";
 import tinyosmpbf from "tiny-osmpbf";
 import type { FeatureCollection } from "geojson";
 import { computeFacts, type FactsPayload } from "@/lib/facts/compute";
-import { LAYER_FILTERS, filterElements, type OsmJson } from "./filters";
+import { LAYER_FILTERS, filterElements, type OsmElement, type OsmJson } from "./filters";
 
 export interface ProcessResult {
   layers: Record<string, FeatureCollection>;
@@ -27,7 +27,7 @@ export function processPbf(pbfBuffer: Buffer): ProcessResult {
 
   for (const category of Object.keys(LAYER_FILTERS)) {
     const rules = LAYER_FILTERS[category];
-    const matchedIds = filterElements(osmData.elements, rules);
+    const { matchedIds, directNodeIds } = filterElements(osmData.elements, rules);
 
     // Resolve relation members' ways and their nodes
     for (const el of osmData.elements) {
@@ -44,8 +44,18 @@ export function processPbf(pbfBuffer: Buffer): ProcessResult {
       }
     }
 
+    // Strip tags from nodes that were only included for way/relation geometry,
+    // so osmtogeojson doesn't render them as separate Point features
     const subset: OsmJson = {
-      elements: osmData.elements.filter((el) => matchedIds.has(el.id)),
+      elements: osmData.elements
+        .filter((el) => matchedIds.has(el.id))
+        .map((el): OsmElement => {
+          if (el.type === "node" && !directNodeIds.has(el.id) && el.tags) {
+            const { tags, ...rest } = el;
+            return rest;
+          }
+          return el;
+        }),
     };
 
     console.log(`  ${category}: ${subset.elements.length} elements`);

@@ -28,7 +28,9 @@ interface FilterRule {
 export const LAYER_FILTERS: Record<string, FilterRule[]> = {
   "bus-lines": [
     { types: ["relation"], conditions: [{ op: "eq", key: "route", value: "bus" }] },
+    { types: ["relation"], conditions: [{ op: "eq", key: "route", value: "trolleybus" }] },
     { types: ["node"], conditions: [{ op: "eq", key: "highway", value: "bus_stop" }] },
+    { types: ["node", "way"], conditions: [{ op: "eq", key: "public_transport", value: "platform" }] },
     { types: ["node"], conditions: [{ op: "eq", key: "public_transport", value: "stop_position" }, { op: "eq", key: "bus", value: "yes" }] },
   ],
   "cycling-paths": [
@@ -39,6 +41,8 @@ export const LAYER_FILTERS: Record<string, FilterRule[]> = {
     { types: ["way"], conditions: [{ op: "eq", key: "cycleway", value: "track" }] },
     { types: ["way"], conditions: [{ op: "eq", key: "cycleway", value: "lane" }] },
     { types: ["way"], conditions: [{ op: "eq", key: "highway", value: "path" }, { op: "eq", key: "bicycle", value: "designated" }] },
+  ],
+  "bike-rental": [
     { types: ["node"], conditions: [{ op: "eq", key: "amenity", value: "bicycle_rental" }] },
   ],
   sidewalks: [
@@ -63,6 +67,7 @@ export const LAYER_FILTERS: Record<string, FilterRule[]> = {
     { types: ["way"], conditions: [{ op: "eq", key: "trolley_wire", value: "yes" }] },
     { types: ["way"], conditions: [{ op: "eq", key: "electrified", value: "contact_line" }, { op: "notHas", key: "railway" }] },
     { types: ["node"], conditions: [{ op: "eq", key: "power", value: "catenary_mast" }, { op: "neq", key: "operator", value: "SNCF Réseau" }] },
+    { types: ["node"], conditions: [{ op: "eq", key: "trolley_wire:hardware", value: "reconnection_funnel" }] },
   ],
   "public-buildings": [
     { types: ["node", "way", "relation"], conditions: [{ op: "eq", key: "amenity", value: "townhall" }] },
@@ -120,9 +125,19 @@ function matchesRule(el: OsmElement, rule: FilterRule): boolean {
   return rule.conditions.every((c) => matchesCondition(tags, c));
 }
 
-export function filterElements(elements: OsmElement[], rules: FilterRule[]): Set<number> {
+export interface FilterResult {
+  matchedIds: Set<number>;
+  /** Node IDs that matched a filter rule directly (not just as way/relation members) */
+  directNodeIds: Set<number>;
+}
+
+export function filterElements(elements: OsmElement[], rules: FilterRule[]): FilterResult {
   const matchedIds = new Set<number>();
+  const directNodeIds = new Set<number>();
+
+  // Pass 1: match ways/relations and collect their member IDs
   for (const el of elements) {
+    if (el.type === "node") continue;
     if (rules.some((r) => matchesRule(el, r))) {
       matchedIds.add(el.id);
       if (el.type === "way" && el.nodes) {
@@ -133,5 +148,15 @@ export function filterElements(elements: OsmElement[], rules: FilterRule[]): Set
       }
     }
   }
-  return matchedIds;
+
+  // Pass 2: match nodes — includes nodes already added as way members
+  for (const el of elements) {
+    if (el.type !== "node") continue;
+    if (rules.some((r) => matchesRule(el, r))) {
+      matchedIds.add(el.id);
+      directNodeIds.add(el.id);
+    }
+  }
+
+  return { matchedIds, directNodeIds };
 }

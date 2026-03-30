@@ -1,6 +1,7 @@
 export type LayerCategory =
   | "bus-lines"
   | "cycling-paths"
+  | "bike-rental"
   | "sidewalks"
   | "electricity"
   | "street-lights"
@@ -15,6 +16,7 @@ export type LayerCategory =
 export const LAYER_CATEGORIES: LayerCategory[] = [
   "bus-lines",
   "cycling-paths",
+  "bike-rental",
   "sidewalks",
   "electricity",
   "street-lights",

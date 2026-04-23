@@ -2,12 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { put } from "@vercel/blob";
 import { downloadPbf } from "@/lib/pbf/download";
 import { processPbf } from "@/lib/pbf/process";
 
 const OUT_DIR = join(__dirname, "..", "public", "data");
 const TILES_OUT = join(OUT_DIR, "overlays.pmtiles");
 const FACTS_OUT = join(OUT_DIR, "facts.json");
+
+const UPLOAD_TO_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 function assertTippecanoe() {
   const probe = spawnSync("tippecanoe", ["--version"], { stdio: "pipe" });
@@ -69,6 +72,25 @@ async function main() {
   }
 
   console.log(`  → ${TILES_OUT}`);
+
+  if (UPLOAD_TO_BLOB) {
+    console.log("Uploading to Vercel Blob…");
+    const tilesBuffer = readFileSync(TILES_OUT);
+    const tilesBlob = await put("tiles/overlays.pmtiles", tilesBuffer, {
+      access: "public",
+      addRandomSuffix: false,
+      contentType: "application/octet-stream",
+    });
+    console.log(`  → ${tilesBlob.url}`);
+
+    const factsBlob = await put("layers/facts.json", JSON.stringify(facts), {
+      access: "public",
+      addRandomSuffix: false,
+      contentType: "application/json",
+    });
+    console.log(`  → ${factsBlob.url}`);
+  }
+
   console.log("Done!");
 }
 

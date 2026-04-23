@@ -1,3 +1,5 @@
+import { Globe, Map as MapIcon, Satellite, Square, type LucideIcon } from "lucide-react";
+
 export type BaseLayer =
   | {
       kind: "style";
@@ -5,6 +7,7 @@ export type BaseLayer =
       label: string;
       styleUrl: string;
       attribution: string;
+      icon: LucideIcon;
     }
   | {
       kind: "raster";
@@ -13,6 +16,14 @@ export type BaseLayer =
       tiles: string[];
       attribution: string;
       tileSize?: number;
+      icon: LucideIcon;
+    }
+  | {
+      kind: "blank";
+      id: string;
+      label: string;
+      color: string;
+      icon: LucideIcon;
     };
 
 export interface SatelliteYear {
@@ -31,16 +42,7 @@ export const baseLayers: BaseLayer[] = [
     styleUrl: "https://tiles.openfreemap.org/styles/liberty",
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; <a href="https://openfreemap.org">OpenFreeMap</a>',
-  },
-  {
-    kind: "raster",
-    id: "cadastre",
-    label: "Cadastre",
-    tiles: [
-      "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
-    ],
-    attribution: '&copy; <a href="https://www.cadastre.gouv.fr">Cadastre</a>',
-    tileSize: 256,
+    icon: Globe,
   },
   {
     kind: "raster",
@@ -51,6 +53,7 @@ export const baseLayers: BaseLayer[] = [
     ],
     attribution: '&copy; <a href="https://geoservices.ign.fr">IGN</a>',
     tileSize: 256,
+    icon: MapIcon,
   },
   {
     kind: "raster",
@@ -61,8 +64,26 @@ export const baseLayers: BaseLayer[] = [
     ],
     attribution: '&copy; <a href="https://geoservices.ign.fr">IGN</a>',
     tileSize: 256,
+    icon: Satellite,
+  },
+  {
+    kind: "blank",
+    id: "blank",
+    label: "Fond blanc",
+    color: "#ffffff",
+    icon: Square,
   }
 ];
+
+export const cadastreOverlay = {
+  id: "cadastre",
+  label: "Cadastre",
+  tiles: [
+    "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+  ],
+  attribution: '&copy; <a href="https://www.cadastre.gouv.fr">Cadastre</a>',
+  tileSize: 256,
+} as const;
 
 // TMS: {zoom}/{x}/{y} → MapLibre uses {z}/{x}/{y} directly
 // WMS: need to convert {proj},{width},{height},{bbox} → MapLibre {bbox-epsg-3857} tile URL

@@ -101,6 +101,9 @@ export const LAYER_FILTERS: Record<string, FilterRule[]> = {
     { types: ["way", "relation"], conditions: [{ op: "eq", key: "leisure", value: "nature_reserve" }] },
     { types: ["node"], conditions: [{ op: "eq", key: "natural", value: "tree" }] },
   ],
+  "highway-areas": [
+    { types: ["way", "relation"], conditions: [{ op: "has", key: "area:highway" }] },
+  ],
   waste: [
     { types: ["node"], conditions: [{ op: "eq", key: "amenity", value: "waste_basket" }] },
     { types: ["node", "way"], conditions: [{ op: "eq", key: "amenity", value: "recycling" }] },

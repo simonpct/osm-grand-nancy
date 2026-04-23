@@ -1,10 +1,19 @@
-export interface BaseLayer {
-  id: string;
-  label: string;
-  tiles: string[];
-  attribution: string;
-  tileSize?: number;
-}
+export type BaseLayer =
+  | {
+      kind: "style";
+      id: string;
+      label: string;
+      styleUrl: string;
+      attribution: string;
+    }
+  | {
+      kind: "raster";
+      id: string;
+      label: string;
+      tiles: string[];
+      attribution: string;
+      tileSize?: number;
+    };
 
 export interface SatelliteYear {
   year: string;
@@ -16,13 +25,15 @@ export interface SatelliteYear {
 
 export const baseLayers: BaseLayer[] = [
   {
+    kind: "style",
     id: "osm",
     label: "OpenStreetMap",
-    tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+    styleUrl: "https://tiles.openfreemap.org/styles/liberty",
     attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; <a href="https://openfreemap.org">OpenFreeMap</a>',
   },
   {
+    kind: "raster",
     id: "cadastre",
     label: "Cadastre",
     tiles: [
@@ -32,6 +43,7 @@ export const baseLayers: BaseLayer[] = [
     tileSize: 256,
   },
   {
+    kind: "raster",
     id: "plan-ign",
     label: "Plan IGN",
     tiles: [
@@ -41,6 +53,7 @@ export const baseLayers: BaseLayer[] = [
     tileSize: 256,
   },
   {
+    kind: "raster",
     id: "satellite",
     label: "Satellite IGN",
     tiles: [

@@ -1,9 +1,40 @@
 import osmtogeojson from "osmtogeojson";
 // @ts-expect-error no types for tiny-osmpbf
 import tinyosmpbf from "tiny-osmpbf";
-import type { FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection, LineString, Polygon, Position } from "geojson";
 import { computeFacts, type FactsPayload } from "@/lib/facts/compute";
 import { LAYER_FILTERS, filterElements, type OsmElement, type OsmJson } from "./filters";
+
+function geometryCenter(f: Feature): [number, number] | null {
+  if (f.geometry.type === "LineString") {
+    const coords = (f.geometry as LineString).coordinates;
+    if (coords.length === 0) return null;
+    const mid = coords[Math.floor(coords.length / 2)];
+    return [mid[0], mid[1]];
+  }
+  if (f.geometry.type === "Polygon") {
+    const ring = (f.geometry as Polygon).coordinates[0];
+    if (!ring || ring.length === 0) return null;
+    let sx = 0, sy = 0;
+    for (const p of ring as Position[]) { sx += p[0]; sy += p[1]; }
+    return [sx / ring.length, sy / ring.length];
+  }
+  return null;
+}
+
+function collapseToPoints(fc: FeatureCollection): FeatureCollection {
+  const features: Feature[] = [];
+  for (const f of fc.features) {
+    if (f.geometry.type === "Point") {
+      features.push(f);
+      continue;
+    }
+    const c = geometryCenter(f);
+    if (!c) continue;
+    features.push({ ...f, geometry: { type: "Point", coordinates: c } });
+  }
+  return { type: "FeatureCollection", features };
+}
 
 export interface ProcessResult {
   layers: Record<string, FeatureCollection>;
@@ -60,7 +91,9 @@ export function processPbf(pbfBuffer: Buffer): ProcessResult {
 
     console.log(`  ${category}: ${subset.elements.length} elements`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    layers[category] = osmtogeojson(subset as any) as FeatureCollection;
+    let fc = osmtogeojson(subset as any) as FeatureCollection;
+    if (category === "benches") fc = collapseToPoints(fc);
+    layers[category] = fc;
   }
 
   console.log("Computing facts...");

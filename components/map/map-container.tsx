@@ -2,25 +2,41 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Popup, Source, type MapRef, type ViewStateChangeEvent } from "react-map-gl/maplibre";
+import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { GeoJSON } from "geojson";
-import type { MapLayerMouseEvent } from "maplibre-gl";
+import { Protocol } from "pmtiles";
+import type { MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
 import type { LayerCategory } from "@/lib/layers/categories";
-import { layersConfig } from "@/lib/layers/config";
+import { layersConfig, type LayerConfig } from "@/lib/layers/config";
+import type { ExpressionSpecification } from "maplibre-gl";
 import { baseLayers, satelliteYears } from "@/lib/layers/base-layers";
-import { layerUrl } from "@/lib/pbf/blob-url";
+import { overlaysTilesUrl } from "@/lib/pbf/blob-url";
 import { LayerPanel } from "./layer-panel";
 import { BaseLayerSwitcher } from "./base-layer-switcher";
 import { FeaturePopup, type PopupInfo } from "./feature-popup";
 import { FunFacts } from "./fun-facts";
 
 const NANCY_CENTER = { longitude: 6.1844, latitude: 48.6921 };
-const EMPTY_COLLECTION: GeoJSON = { type: "FeatureCollection", features: [] };
+const OVERLAYS_SOURCE_ID = "overlays";
+
+function paintColor(config: LayerConfig): ExpressionSpecification {
+  if (config.colorByTag) {
+    const stops = Object.entries(config.colorByTag.values).flatMap(([k, v]) => [k, v]);
+    return ["match", ["get", config.colorByTag.key], ...stops, config.color] as unknown as ExpressionSpecification;
+  }
+  return ["coalesce", ["get", "colour"], config.color] as unknown as ExpressionSpecification;
+}
 
 const LS_BASE_LAYER = "infra-nancy:baseLayer";
 const LS_SATELLITE_YEAR = "infra-nancy:satelliteYear";
 const LS_VISIBLE_LAYERS = "infra-nancy:visibleLayers";
 const LS_MAP_VIEW = "infra-nancy:mapView";
+
+if (typeof window !== "undefined" && !(maplibregl as unknown as { __pmtilesRegistered?: boolean }).__pmtilesRegistered) {
+  const protocol = new Protocol();
+  maplibregl.addProtocol("pmtiles", protocol.tile);
+  (maplibregl as unknown as { __pmtilesRegistered?: boolean }).__pmtilesRegistered = true;
+}
 
 function readStoredString(key: string, fallback: string): string {
   try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
@@ -50,8 +66,6 @@ export default function MapContainer() {
   const [visibleLayers, setVisibleLayers] = useState<Set<LayerCategory>>(
     () => new Set(readStoredLayers())
   );
-  const [layerData, setLayerData] = useState<Partial<Record<LayerCategory, GeoJSON>>>({});
-  const [loadingLayers, setLoadingLayers] = useState<Set<LayerCategory>>(new Set());
   const [baseLayerId, setBaseLayerId] = useState(() => readStoredString(LS_BASE_LAYER, "osm"));
   const [satelliteYear, setSatelliteYear] = useState<string | null>(
     () => readStoredStringOrNull(LS_SATELLITE_YEAR)
@@ -68,7 +82,6 @@ export default function MapContainer() {
     } catch { /* quota exceeded / SSR */ }
   }, []);
 
-  // Persist base layer & satellite year
   useEffect(() => {
     try {
       localStorage.setItem(LS_BASE_LAYER, baseLayerId);
@@ -77,59 +90,20 @@ export default function MapContainer() {
     } catch { /* quota exceeded / SSR */ }
   }, [baseLayerId, satelliteYear]);
 
-  // Persist visible layers
   useEffect(() => {
     try {
       localStorage.setItem(LS_VISIBLE_LAYERS, JSON.stringify([...visibleLayers]));
     } catch { /* quota exceeded / SSR */ }
   }, [visibleLayers]);
 
-  const fetchLayerData = useCallback(async (category: LayerCategory) => {
-    if (layerData[category]) return;
-
-    setLoadingLayers((prev) => new Set(prev).add(category));
-    try {
-      const res = await fetch(layerUrl(category));
-      const data = await res.json();
-      setLayerData((prev) => ({ ...prev, [category]: data }));
-    } catch (error) {
-      console.error(`Failed to fetch ${category}:`, error);
-      setLayerData((prev) => ({ ...prev, [category]: EMPTY_COLLECTION }));
-    } finally {
-      setLoadingLayers((prev) => {
-        const next = new Set(prev);
-        next.delete(category);
-        return next;
-      });
-    }
-  }, [layerData]);
-
-  // Fetch data for layers restored from localStorage
-  const didRestoreRef = useRef(false);
-  useEffect(() => {
-    if (didRestoreRef.current) return;
-    didRestoreRef.current = true;
-    for (const id of visibleLayers) {
-      fetchLayerData(id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const toggleLayer = useCallback((id: LayerCategory) => {
+    setVisibleLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
-
-  const toggleLayer = useCallback(
-    (id: LayerCategory) => {
-      setVisibleLayers((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) {
-          next.delete(id);
-        } else {
-          next.add(id);
-          fetchLayerData(id);
-        }
-        return next;
-      });
-    },
-    [fetchLayerData]
-  );
 
   const handleBaseLayerChange = useCallback((id: string) => {
     setBaseLayerId(id);
@@ -178,31 +152,49 @@ export default function MapContainer() {
     ? null
     : baseLayers.find((l) => l.id === baseLayerId) ?? baseLayers[0];
 
-  const tiles = activeSatellite?.tiles ?? baseLayer?.tiles ?? baseLayers[0].tiles;
-  const tileSize = activeSatellite?.tileSize ?? baseLayer?.tileSize ?? 256;
-  const attribution =
-    activeSatellite?.attribution ?? baseLayer?.attribution ?? baseLayers[0].attribution;
+  const tilesUrl = overlaysTilesUrl();
 
-  const mapStyle = useMemo(() => ({
-    version: 8 as const,
-    sources: {
-      "base-tiles": {
-        type: "raster" as const,
-        tiles,
-        tileSize,
-        attribution,
-      },
-    },
-    layers: [
-      {
-        id: "base-tiles",
-        type: "raster" as const,
-        source: "base-tiles",
-        minzoom: 0,
-        maxzoom: 22,
-      },
-    ],
-  }), [tiles, tileSize, attribution]);
+  const mapStyle = useMemo<string | StyleSpecification>(() => {
+    if (activeSatellite) {
+      return {
+        version: 8 as const,
+        sources: {
+          "base-tiles": {
+            type: "raster" as const,
+            tiles: activeSatellite.tiles,
+            tileSize: activeSatellite.tileSize ?? 256,
+            attribution: activeSatellite.attribution,
+          },
+        },
+        layers: [{ id: "base-tiles", type: "raster" as const, source: "base-tiles", minzoom: 0, maxzoom: 22 }],
+      };
+    }
+    if (baseLayer?.kind === "style") {
+      return baseLayer.styleUrl;
+    }
+    const raster = baseLayer?.kind === "raster" ? baseLayer : null;
+    if (raster) {
+      return {
+        version: 8 as const,
+        sources: {
+          "base-tiles": {
+            type: "raster" as const,
+            tiles: raster.tiles,
+            tileSize: raster.tileSize ?? 256,
+            attribution: raster.attribution,
+          },
+        },
+        layers: [{ id: "base-tiles", type: "raster" as const, source: "base-tiles", minzoom: 0, maxzoom: 22 }],
+      };
+    }
+    return baseLayers[0].kind === "style"
+      ? baseLayers[0].styleUrl
+      : {
+          version: 8 as const,
+          sources: {},
+          layers: [],
+        } as StyleSpecification;
+  }, [activeSatellite, baseLayer]);
 
   return (
     <div className="relative h-screen w-screen">
@@ -213,52 +205,51 @@ export default function MapContainer() {
         style={{ width: "100%", height: "100%" }}
         onMoveEnd={handleMoveEnd}
         onClick={handleMapClick}
+        minZoom={11}
         interactiveLayerIds={layersConfig
           .filter((c) => visibleLayers.has(c.id))
           .flatMap((c) => [`${c.id}-point`, `${c.id}-line`, `${c.id}-polygon`])}
         cursor={popupInfo ? "default" : undefined}
       >
-        {layersConfig.map((config) => {
-          const data = layerData[config.id] ?? EMPTY_COLLECTION;
-          const visible = visibleLayers.has(config.id);
-
-          return (
-            <Source
-              key={config.id}
-              id={config.id}
-              type="geojson"
-              data={data}
-            >
+        <Source id={OVERLAYS_SOURCE_ID} type="vector" url={`pmtiles://${tilesUrl}`}>
+          {layersConfig.flatMap((config) => {
+            const visible = visibleLayers.has(config.id);
+            const elements = [
               <Layer
+                key={`${config.id}-line`}
                 id={`${config.id}-line`}
+                source-layer={config.id}
                 type="line"
-                filter={["==", "$type", "LineString"]}
+                filter={["==", ["geometry-type"], "LineString"]}
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
-                  "line-color": ["coalesce", ["get", "colour"], config.color],
+                  "line-color": paintColor(config),
                   "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 14, 3, 18, 6],
                   "line-opacity": 0.8,
                 }}
-              />
+              />,
               <Layer
+                key={`${config.id}-polygon`}
                 id={`${config.id}-polygon`}
+                source-layer={config.id}
                 type="fill"
-                filter={["==", "$type", "Polygon"]}
+                filter={["==", ["geometry-type"], "Polygon"]}
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
-                  "fill-color": ["coalesce", ["get", "colour"], config.color],
+                  "fill-color": paintColor(config),
                   "fill-opacity": 0.3,
-                  "fill-outline-color": ["coalesce", ["get", "colour"], config.color],
+                  "fill-outline-color": paintColor(config),
                 }}
-              />
-              {/* Point layer: larger circle for fire hydrants at high zoom to fit text */}
+              />,
               <Layer
+                key={`${config.id}-point`}
                 id={`${config.id}-point`}
+                source-layer={config.id}
                 type="circle"
-                filter={["==", "$type", "Point"]}
+                filter={["==", ["geometry-type"], "Point"]}
                 layout={{ visibility: visible ? "visible" : "none" }}
                 paint={{
-                  "circle-color": ["coalesce", ["get", "colour"], config.color],
+                  "circle-color": paintColor(config),
                   "circle-radius":
                     config.id === "fire-hydrants"
                       ? ["interpolate", ["linear"], ["zoom"], 14, 4, 16, 12]
@@ -267,13 +258,16 @@ export default function MapContainer() {
                   "circle-stroke-width": 1,
                   "circle-opacity": 0.8,
                 }}
-              />
-              {/* Bike rental 300m coverage zone */}
-              {config.id === "bike-rental" && (
+              />,
+            ];
+            if (config.id === "bike-rental") {
+              elements.push(
                 <Layer
+                  key="bike-rental-coverage"
                   id="bike-rental-coverage"
+                  source-layer={config.id}
                   type="circle"
-                  filter={["==", "$type", "Point"]}
+                  filter={["==", ["geometry-type"], "Point"]}
                   layout={{ visibility: visible && bikeCoverage ? "visible" : "none" }}
                   paint={{
                     "circle-color": config.color,
@@ -291,13 +285,16 @@ export default function MapContainer() {
                     "circle-stroke-opacity": 0.3,
                   }}
                 />
-              )}
-              {/* Fire hydrant ref label inside the circle */}
-              {config.id === "fire-hydrants" && (
+              );
+            }
+            if (config.id === "fire-hydrants") {
+              elements.push(
                 <Layer
+                  key={`${config.id}-label`}
                   id={`${config.id}-label`}
+                  source-layer={config.id}
                   type="symbol"
-                  filter={["==", "$type", "Point"]}
+                  filter={["==", ["geometry-type"], "Point"]}
                   minzoom={16}
                   layout={{
                     visibility: visible ? "visible" : "none",
@@ -310,10 +307,11 @@ export default function MapContainer() {
                     "text-color": "#fff",
                   }}
                 />
-              )}
-            </Source>
-          );
-        })}
+              );
+            }
+            return elements;
+          })}
+        </Source>
 
         {popupInfo && (
           <Popup
@@ -330,7 +328,7 @@ export default function MapContainer() {
 
       <LayerPanel
         visibleLayers={visibleLayers}
-        loadingLayers={loadingLayers}
+        loadingLayers={new Set()}
         onToggle={toggleLayer}
         bikeCoverage={bikeCoverage}
         onBikeCoverageToggle={() => setBikeCoverage((v) => !v)}
@@ -349,4 +347,3 @@ export default function MapContainer() {
     </div>
   );
 }
-

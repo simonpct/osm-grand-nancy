@@ -23,6 +23,13 @@ export interface SubLabelRule {
   label: string;
 }
 
+export interface ColorByTag {
+  /** OSM tag whose value drives the color */
+  key: string;
+  /** Map of tag values to CSS colors */
+  values: Record<string, string>;
+}
+
 export interface LayerConfig {
   id: LayerCategory;
   label: string;
@@ -32,6 +39,8 @@ export interface LayerConfig {
   popupFields?: PopupFieldConfig[];
   /** Override popup header label based on feature tags */
   subLabels?: SubLabelRule[];
+  /** Derive the paint color from a tag value instead of the flat `color` */
+  colorByTag?: ColorByTag;
 }
 
 export const layersConfig: LayerConfig[] = [
@@ -155,6 +164,30 @@ export const layersConfig: LayerConfig[] = [
       { key: "landuse", label: "Usage" },
       { key: "operator", label: "Gestionnaire" },
       { key: "opening_hours", label: "Horaires" },
+    ],
+  },
+  {
+    id: "highway-areas", label: "Zones piétonnes & voirie", color: "#adb5bd", type: "polygon", icon: "⬛",
+    colorByTag: {
+      key: "area:highway",
+      values: {
+        pedestrian:    "#f4a261",
+        footway:       "#a8dadc",
+        cycleway:      "#2a9d8f",
+        primary:       "#e63946",
+        secondary:     "#f77f00",
+        tertiary:      "#e9c46a",
+        residential:   "#ced4da",
+        living_street: "#ffb4a2",
+        service:       "#b5838d",
+        track:         "#b08968",
+        path:          "#d8e2dc",
+      },
+    },
+    popupFields: [
+      { key: "name", label: "Nom" },
+      { key: "area:highway", label: "Type", values: { pedestrian: "Piétonne", footway: "Trottoir", primary: "Voie primaire", secondary: "Voie secondaire", tertiary: "Voie tertiaire", residential: "Résidentielle", service: "Service", living_street: "Zone de rencontre", cycleway: "Piste cyclable" } },
+      { key: "surface", label: "Revêtement" },
     ],
   },
   {

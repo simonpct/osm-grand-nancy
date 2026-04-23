@@ -11,7 +11,8 @@ export type LayerCategory =
   | "fire-hydrants"
   | "defibrillators"
   | "green-spaces"
-  | "waste";
+  | "waste"
+  | "highway-areas";
 
 export const LAYER_CATEGORIES: LayerCategory[] = [
   "bus-lines",
@@ -27,4 +28,5 @@ export const LAYER_CATEGORIES: LayerCategory[] = [
   "defibrillators",
   "green-spaces",
   "waste",
+  "highway-areas",
 ];

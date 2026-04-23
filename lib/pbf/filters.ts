@@ -27,7 +27,7 @@ interface FilterRule {
 
 export const LAYER_FILTERS: Record<string, FilterRule[]> = {
   "bus-lines": [
-    { types: ["relation"], conditions: [{ op: "eq", key: "route", value: "bus" }] },
+    { types: ["relation"], conditions: [{ op: "eq", key: "route", value: "bus" }, { op: "neq", key: "operator", value: "SNCF Voyageurs" }, { op: "neq", key: "network", value: "Flixbus" }, { op: "neq", key: "network", value: "Fluo Grand Est 54" }] },
     { types: ["relation"], conditions: [{ op: "eq", key: "route", value: "trolleybus" }] },
     { types: ["node"], conditions: [{ op: "eq", key: "highway", value: "bus_stop" }] },
     { types: ["node", "way"], conditions: [{ op: "eq", key: "public_transport", value: "platform" }] },

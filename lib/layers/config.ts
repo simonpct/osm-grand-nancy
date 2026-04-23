@@ -45,7 +45,7 @@ export interface LayerConfig {
 
 export const layersConfig: LayerConfig[] = [
   {
-    id: "bus-lines", label: "Lignes de bus", color: "#e63946", type: "mixed", icon: "🚌",
+    id: "bus-lines", label: "Lignes de bus", color: "#00b7cc", type: "mixed", icon: "🚌",
     popupFields: [
       { key: "name", label: "Nom" },
       { key: "ref", label: "Ligne", badge: true },

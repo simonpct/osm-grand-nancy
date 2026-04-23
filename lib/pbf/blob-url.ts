@@ -1,4 +1,4 @@
-const BLOB_BASE = process.env.NEXT_PUBLIC_BLOB_URL;
+const BLOB_BASE = process.env.NEXT_PUBLIC_BLOB_URL ?? "";
 
 export function overlaysTilesUrl(): string {
   if (BLOB_BASE) return `${BLOB_BASE}/tiles/overlays.pmtiles`;

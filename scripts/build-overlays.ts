@@ -79,6 +79,7 @@ async function main() {
     const tilesBlob = await put("tiles/overlays.pmtiles", tilesBuffer, {
       access: "public",
       addRandomSuffix: false,
+      allowOverwrite: true,
       contentType: "application/octet-stream",
     });
     console.log(`  → ${tilesBlob.url}`);
@@ -86,6 +87,7 @@ async function main() {
     const factsBlob = await put("layers/facts.json", JSON.stringify(facts), {
       access: "public",
       addRandomSuffix: false,
+      allowOverwrite: true,
       contentType: "application/json",
     });
     console.log(`  → ${factsBlob.url}`);
